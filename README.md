@@ -16,7 +16,7 @@ used with a normal **USER:CN=...**
 ## Installation
 
 ### Prerequesites
-
+* You'll need a Kafka installation, for further instructions check the [Apache Kafka page](https://kafka.apache.org/downloads).
 * You'll need to employ Maven, for installation instructions check the [Maven official page](https://maven.apache.org/install.html).
 * You'll need a deployed SPIRE Server and Agent, for installation instructions check Spiffe pages on the [SPIRE Agent](https://spiffe.io/docs/latest/deploying/install-agents/) and the [SPIRE Server](https://spiffe.io/docs/latest/deploying/install-server/)  
 
@@ -30,7 +30,7 @@ This creates the file "target/kafka-spiffe-principal-X.X.X.jar" where "X.X.X" wi
 
 ### Generate SVIDs for Kafka Broker Server 
 
-* **OBS: The CN/SAN in the server certificate must match the machine's hostname.** In our example our <HOSTNAME> would be kafka.lsd.ufcg.edu.br
+* **OBS: The CN/SAN in the server certificate must match the machine's hostname.** Using the `-dns` flag as seen in the command `mint` below solves the problem.
 
 ```bash
 cd /path/to/spire/
@@ -99,12 +99,13 @@ keytool \
 
 #### Kafka properties
 
-The following configuration refers to a Kafka broker wth a TLS listener, change it as you need it. In our example our <HOSTNAME> is kafka.lsd.ufcg.edu.br
+The following configuration refers to a Kafka broker wth a TLS listener, change it as you need it. The placeholder `<HOSTNAME>` refers to the name of the machine hosting the Kafka Broker Server.
 
 ```ini
 broker.id=0
 port=9092
 zookeeper.connect=localhost:2181
+advertised.port = 9092
 advertised.host.name=<HOSTNAME> 
 offsets.topic.replication.factor=1
 
@@ -129,9 +130,20 @@ principal.builder.class=io.okro.kafka.SpiffePrincipalBuilder
 ssl.endpoint.identification.algorithm=
 ```
 
-* **OBS: If you choose to not disable host name checking you'll need to add the <HOSTNAME> to the CN/SAN of all certificates provided to the Kafka deployment.** Either way this must be done to the server certificate as we mentioned in a section above. 
+* **OBS: If you choose to not disable host name checking you'll need to add the hostname to the CN/SAN of both the client and server certificates provided to the Kafka deployment.**
+* **OBS: Whether or not you disable host name checking, we must add the hostname to the CN/SAN of the server certificate. The commands in the respective already do this.**
 
 #### Update hosts
 
 Add the line `<KAFKA-HOST-IP>    <HOSTNAME>` to the file /etc/hosts of the machine that contains the kafka server and the kafka client. Where <KAFKA-HOST-IP> refers to the IP address of said machine.  
 
+## Grant rights to the Kafka Broker via ACL 
+
+By default if there's no ACL for a given resource it can't be accessed. For this reason, the exception "org.apache.kafka.common.errors.ClusterAuthorizationException" will be raised and mentioned in the file logs/kafka-authorizer.log, in order to solve this problem we must authorize the certificate used by our Kafka Broker Server through an ACL rule.
+
+```bash
+bin/kafka-acls.sh \
+  --authorizer-properties zookeeper.connect=localhost:2181 \
+  --cluster '*' --operation 'ClusterAction' \
+  --add --allow-principal 'SPIFFE:spiffe://example.org/kafka-server' --allow-host '*'
+```
