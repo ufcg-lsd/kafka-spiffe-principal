@@ -28,9 +28,9 @@ mvn package
 
 This creates the file "target/kafka-spiffe-principal-X.X.X.jar" where "X.X.X" will be the actual version. Later we'll need to add this file to the JVM classpath.
 
-### Generate SVIDs for Server 
+### Generate SVIDs for Kafka Broker Server 
 
-* **OBS: The CN in the server certificate must match the machine's hostname.** 
+* **OBS: The CN/SAN in the server certificate must match the machine's hostname.** In our example our <HOSTNAME> would be kafka.lsd.ufcg.edu.br
 
 ```bash
 cd /path/to/spire/
@@ -39,7 +39,8 @@ mkdir -p ./certs-server/
 
 bin/spire-server x509 mint \
   -write certs-server -ttl 48h \
-  -spiffeID "spiffe://example.org/kafka-server"
+  -spiffeID "spiffe://example.org/kafka-server" \
+  -dns <HOSTNAME>
 
 mv certs-server/bundle.pem certs-server/ca-cert.pem
 mv certs-server/key.pem certs-server/kafka-server-key.pem
@@ -47,25 +48,6 @@ mv certs-server/svid.pem certs-server/kafka-server-cert.pem
 
 # Move the files to the root of the kafka installation
 cp certs-server/* /path/to/kafka/
-```
-
-### Generate SVID for client
-
-```bash
-cd /path/to/spire/
-
-mkdir -p ./certs-client/
-
-bin/spire-server x509 mint \
-  -write ./certs-client/ -ttl 48h \
-  -spiffeID "spiffe://example.org/kafka-client"
-
-mv certs-client/bundle.pem certs-client/ca-cert.pem
-mv certs-client/key.pem    certs-client/kafka-client-key.pem
-mv certs-client/svid.pem   certs-client/kafka-client-cert.pem
-
-# Move the files to the root of the kafka installation
-cp certs-client/* /path/to/kafka/
 ```
 
 ### Configure Kafka
@@ -113,27 +95,7 @@ keytool \
   -destkeystore broker.keystore.jks \
   -srckeystore kafka-server.p12 \
   -srcstoretype PKCS12 -srcstorepass 123456 -noprompt
-
-# Convert CLIENT private key and certificate files into a PKCS12 file.
-openssl pkcs12 \
-  -export -in kafka-client-cert.pem \
-  -inkey kafka-client-key.pem \
-  -out kafka-client.p12 \
-  -name kafka \
-  -CAfile ca-cert.pem \
-  -caname CARoot \
-  -password pass:123456
-
-# Import the CLIENT PKCS12 file into the CLIENT keystore
-keytool \
-  -importkeystore \
-  -deststorepass 123456 \
-  -destkeypass 123456 \
-  -destkeystore client.keystore.jks \
-  -srckeystore kafka-client.p12 \
-  -srcstoretype PKCS12 -srcstorepass 123456 -noprompt
 ```
-
 
 #### Kafka properties
 
@@ -166,3 +128,10 @@ principal.builder.class=io.okro.kafka.SpiffePrincipalBuilder
 # Disable host name checking
 ssl.endpoint.identification.algorithm=
 ```
+
+* **OBS: If you choose to not disable host name checking you'll need to add the <HOSTNAME> to the CN/SAN of all certificates provided to the Kafka deployment.** Either way this must be done to the server certificate as we mentioned in a section above. 
+
+#### Update hosts
+
+Add the line `<KAFKA-HOST-IP>    <HOSTNAME>` to the file /etc/hosts of the machine that contains the kafka server and the kafka client. Where <KAFKA-HOST-IP> refers to the IP address of said machine.  
+
