@@ -44,10 +44,13 @@ public class SpiffePrincipalBuilder implements KafkaPrincipalBuilder {
 
     private @Nullable X509Certificate firstX509(SSLSession session) {
         try {
+            LOG.warn("Starting out");
             Certificate[] peerCerts = session.getPeerCertificates();
+            LOG.warn("get session peer certificates");
             if (peerCerts.length == 0) {
                 return null;
             }
+            LOG.warn("get first certificate");
             Certificate first = peerCerts[0];
             if (!(first instanceof X509Certificate)) {
                 return null;
